@@ -1,0 +1,50 @@
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.egg-info/
+dist/
+build/
+
+# VSCode, PyCharm
+.vscode/
+.idea/
+
+# System
+.DS_Store
+
+# Docker artifacts
+*.log
+logs/
+*.db
+*.sqlite3
+*.parquet
+*.csv
+*.tmp
+docker-compose.override.yml
+
+# Pytest, coverage
+.pytest_cache/
+coverage/
+htmlcov/
+*.cover
+*.coverage
+.cache/
+__tests__/
+
+# Local configs
+.env
+.env.*
+
+# Custom directories
+checkpoints/
+fake-api-service/
+db-data/
+servers.json
+
+temp.md
+/test-scripts
+independent-coins.md
+XBX-USD-constituents.md
+btsusdt-insruments.md
