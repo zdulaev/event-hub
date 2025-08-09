@@ -41,10 +41,16 @@ __tests__/
 checkpoints/
 fake-api-service/
 db-data/
-servers.json
+certs/
+/pgweb/bookmarks/default.toml
+/timescaledb/data/
+/test-scripts/
 
 temp.md
-/test-scripts
 independent-coins.md
 XBX-USD-constituents.md
 btsusdt-insruments.md
+docker-clear.md
+caddy.md
+caddy/Caddyfile
+caddy/data

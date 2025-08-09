@@ -1,39 +1,82 @@
-version: "3.9"
-
 services:
-
-  # 📦 LOGGER
+  # SERVICE LOGGER
   logger:
     build:
       context: .
       dockerfile: logger/Dockerfile
     container_name: logger
     restart: unless-stopped
+    expose:
+      - "8999"
     environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
 
-  # 📦 APPLICATION coindesk_2019-sda-ohlcv
+  # SERVICE DATABASE
+  timescaledb:
+    image: timescale/timescaledb:2.13.0-pg14
+    container_name: timescaledb
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Тюнинг PostgreSQL под ограниченную память:
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-128MB}
+      POSTGRES_WORK_MEM: ${POSTGRES_WORK_MEM:-16MB}
+      POSTGRES_MAINTENANCE_WORK_MEM: ${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}
+      TIMESCALEDB_TELEMETRY: ${TIMESCALEDB_TELEMETRY:-off} # отключить телеметрию
+    volumes:
+      - ./timescaledb/data:/var/lib/postgresql/data
+    mem_limit: ${postgres_mem_limit:-400m}
+    cpus: ${postgres_cpus:-0.5} # не более 50% одного ядра
+
+  # SERVICE PGWEB
+  pgweb:
+    image: sosedoff/pgweb:latest
+    restart: unless-stopped
+    command: [ "--listen=0.0.0.0", "--sessions" ]
+    expose:
+      - "8081"
+    environment:
+      PGWEB_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}?sslmode=disable
+      PGWEB_SESSIONS: "1" # включить поддержку нескольких сессий/bookmarks
+    volumes:
+      - ./pgweb/bookmarks:/root/.pgweb/bookmarks:ro # папка с TOML-файлами закладок
+    mem_limit: ${pgweb_mem_limit:-128m} # максимум 128 МБ памяти
+    cpus: ${pgweb_cpus:-0.2} # не более 20% одного ядра
+    depends_on:
+      - timescaledb
+
+  # SERVICE CADDY (TLS-обертка для pgweb)
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - ./caddy/data:/data
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - pgweb
+    mem_limit: ${caddy_mem_limit:-64m} # максимум 64 МБ памяти
+    cpus: ${caddy_cpus:-0.1} # не более 10% одного ядра
+
+  # APPLICATION coindesk_2019-sda-ohlcv
   coindesk_2019-sda-ohlcv:
     build:
       context: .
       dockerfile: coindesk_2019-sda-ohlcv/Dockerfile
     container_name: coindesk_2019-sda-ohlcv
     restart: unless-stopped
+    expose:
+      - "8000"
     environment:
       SERVICE_NAME: coindesk_2019-sda-ohlcv
       LOGGING_URL: http://logger:8999/logs
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
     depends_on:
       - timescaledb
-
-  # 📦 DATABASE
-  timescaledb:
-    image: timescale/timescaledb:2.13.0-pg14
-    container_name: timescaledb
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - ./db-data:/var/lib/postgresql/data
+    mem_limit: ${coindesk_2019_sda_olhcv_mem_limit:-256m} # максимум 256 МБ памяти
+    cpus: ${coindesk_2019_sda_olhcv_cpus:-0.3} # не более 30% одного ядра
